@@ -175,12 +175,42 @@ def cloth_segmentation( cv_image):
 
     return clothes_img
 
-
+cnt = 0
 def hue_hist(img, bins=180):
+    global cnt
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+
+    saturation_channel = hsv[:, :, 1]
+    color_mask = np.where(saturation_channel < 10, 0, 255).astype(np.uint8)     # 低彩度を無視したマスク画像
+    low_saturation = np.where((saturation_channel > 0) & (saturation_channel <= 10), 255, 0).astype(np.uint8)
+    sat_hist_num = np.count_nonzero(low_saturation)
+    # print(sat_hist_num)
+
+
+    hist = cv2.calcHist([hsv], [0], color_mask, [bins], [0, 180])
+    new_element = np.array([sat_hist_num], dtype=hist.dtype)
+    # print(hist.shape, sat_hist_num.shape, len(sat_hist_num))
+    # print(type(hist), type(sat_hist_num))
+
+    # print(hist)
+    # hist = np.concatenate((hist, sat_hist_num))
+    hist = np.append(hist, new_element)
+    # print(type(hist[0]), type(hist[180]))
+    print(len(hist))
+
+    hist = cv2.normalize(hist, None, 0.0, 1.0, cv2.NORM_MINMAX)
+    total_sum = sum(hist)
+    for i in range(len(hist)):
+        hist[i] = hist[i] / total_sum
+
+    # print(sat_hist_num + np.count_nonzero(color_mask), total_sum[0])
+    return hist
+
+def custom_hist(img, bins=180):
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     clothes_mask_img_gs = cv2.imread('./output/cloth_seg/final_seg.png', cv2.IMREAD_GRAYSCALE)     # グレースケール画像
     # clothes_mask_img_gs = None
-    hist = cv2.calcHist([hsv], [0], clothes_mask_img_gs, [bins], [0, 180])
+    hist = cv2.calcHist([hsv], [0], clothes_mask_img_gs, [bins+1], [0, 180])
     # hist = cv2.normalize(hist, None, 0.0, 1.0, cv2.NORM_MINMAX)
 
     total_sum = sum(hist)
@@ -201,9 +231,11 @@ def comare_hist(img1,img2):
 
 def comare_hist_v1(q_hist, t_hist):
     METHOD = cv2.HISTCMP_CORREL
+    print(len(q_hist), len(t_hist), type(q_hist), type(t_hist))
     res = cv2.compareHist(q_hist, t_hist, METHOD)
     plot_hist_do(q_hist, t_hist)
     print("com hist {}".format(res))
+    # print(hist, type(hist))
 
 import matplotlib.pyplot as plt
 def plot_hist(hist, title=None):
@@ -215,7 +247,7 @@ def plot_hist(hist, title=None):
 
 def plot_hist_do(hist1, hist2, title=None):
     plt.plot(hist1, color='blue', label='blue')                # 青チャンネルのヒストグラムのグラフを表示
-    plt.plot(hist2, color='red', label='red')                # 青チャンネルのヒストグラムのグラフを表示
+    plt.plot(hist2, color='red', label='teacher')                # 青チャンネルのヒストグラムのグラフを表示
     plt.legend(loc=0)                                                # 凡例
     plt.xlabel('Brightness')                                         # x軸ラベル(明度)
     plt.ylabel('Count')                                              # y軸ラベル(画素の数)
